@@ -13,7 +13,6 @@ export function FrontScreen({ navigation }: Props) {
       <View style={styles.topRule} />
       <View style={styles.hero}>
         <Text style={styles.logo}>7even</Text>
-        <Text style={styles.tagline}>THE SCHOLASTIC DATE ENGINE</Text>
       </View>
 
       <View style={styles.actions}>
