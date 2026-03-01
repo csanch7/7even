@@ -1,16 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../api/client';
 import { MatchResponse } from '../types/api';
 import { ui } from '../theme/ui';
-
-interface SuggestionItem {
-  name: string;
-  type: string;
-  matchedTags: string[];
-}
 
 interface Props {
   onProfilePress?: () => void;
@@ -20,7 +14,6 @@ interface Props {
 export function MatchScreen({ onProfilePress, onMessagesPress }: Props) {
   const { accessToken, logout } = useAuth();
   const [match, setMatch] = useState<MatchResponse | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -29,16 +22,6 @@ export function MatchScreen({ onProfilePress, onMessagesPress }: Props) {
     try {
       const current = await apiRequest<MatchResponse | null>('/matches/current', undefined, accessToken);
       setMatch(current);
-      if (current?._id) {
-        const suggestionRes = await apiRequest<{ items: SuggestionItem[] }>(
-          `/matches/${current._id}/suggestions`,
-          undefined,
-          accessToken
-        );
-        setSuggestions(suggestionRes?.items ?? []);
-      } else {
-        setSuggestions([]);
-      }
     } finally {
       setRefreshing(false);
     }
@@ -79,11 +62,13 @@ export function MatchScreen({ onProfilePress, onMessagesPress }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={ui.color.accent} />}
       >
         <View style={styles.statusCard}>
-          <Text style={styles.statusIcon}>{match ? '💬' : '🔎'}</Text>
+          <Text style={styles.statusIcon}>{match ? '❤️' : '🔎'}</Text>
           <Text style={styles.statusTitle}>{match ? 'MATCH READY' : 'SEARCHING FOR YOUR MATCH'}</Text>
           <Text style={styles.statusBody}>
             {match
-              ? `You are matched. Status: ${match.status}. Expires ${new Date(match.expiresAt).toLocaleString()}.`
+              ? `You are matched with ${match.matchedWith?.fullName ?? 'someone'}. Expires ${new Date(
+                  match.expiresAt
+                ).toLocaleString()}.`
               : 'Our algorithm is finding someone who shares your Core 7. Check back soon.'}
           </Text>
 
@@ -93,18 +78,34 @@ export function MatchScreen({ onProfilePress, onMessagesPress }: Props) {
             </Pressable>
           )}
 
-          {!!match && (
-            <View style={styles.suggestionSection}>
-              <Text style={styles.suggestionTitle}>TOP 5 SUGGESTIONS</Text>
-              {suggestions.slice(0, 5).map((item, idx) => (
-                <View key={`${item.name}-${idx}`} style={styles.suggestionRow}>
-                  <Text style={styles.suggestionName}>{item.name}</Text>
-                  <Text style={styles.suggestionMeta}>
-                    {item.type} • {item.matchedTags.join(', ')}
+          {!!match?.matchedWith && (
+            <View style={styles.matchCard}>
+              {!!match.matchedWith.profilePhotoUrl ? (
+                <Image source={{ uri: match.matchedWith.profilePhotoUrl }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitial}>
+                    {match.matchedWith.fullName?.trim().charAt(0).toUpperCase() || '?'}
                   </Text>
                 </View>
-              ))}
-              {suggestions.length === 0 && <Text style={styles.suggestionMeta}>Suggestions are loading for your pair.</Text>}
+              )}
+              <Text style={styles.matchName}>{match.matchedWith.fullName}</Text>
+              {!!match.matchedWith.school && (
+                <Text style={styles.matchMeta}>{match.matchedWith.school}</Text>
+              )}
+              {!!match.matchedWith.major && (
+                <Text style={styles.matchMeta}>{match.matchedWith.major}</Text>
+              )}
+            </View>
+          )}
+
+          {!!match && (
+            <View style={styles.suggestionSection}>
+              <Text style={styles.suggestionTitle}>DATE IDEA</Text>
+              <View style={styles.suggestionRow}>
+                <Text style={styles.suggestionName}>Date suggestion coming soon</Text>
+                <Text style={styles.suggestionMeta}>Template placeholder</Text>
+              </View>
             </View>
           )}
         </View>
@@ -114,17 +115,6 @@ export function MatchScreen({ onProfilePress, onMessagesPress }: Props) {
         </Pressable>
       </ScrollView>
 
-      <View style={styles.bottomTabs}>
-        <Pressable style={styles.tab} onPress={() => void load()}>
-          <Text style={[styles.tabText, styles.tabActive]}>HOME</Text>
-        </Pressable>
-        <Pressable style={styles.tab}>
-          <Text style={styles.tabText}>DATES</Text>
-        </Pressable>
-        <Pressable style={styles.tab} onPress={onMessagesPress}>
-          <Text style={[styles.tabText, !match ? styles.tabDisabled : undefined]}>MESSAGES</Text>
-        </Pressable>
-      </View>
     </SafeAreaView>
   );
 }
@@ -240,6 +230,52 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     gap: 10
   },
+  matchCard: {
+    marginTop: 18,
+    width: '100%',
+    borderRadius: ui.radius.md,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.card,
+    padding: 14,
+    alignItems: 'center',
+    gap: 4
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    marginBottom: 8
+  },
+  avatarFallback: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
+    marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  avatarInitial: {
+    color: ui.color.accent,
+    fontSize: 28,
+    fontWeight: '800'
+  },
+  matchName: {
+    color: ui.color.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  matchMeta: {
+    color: ui.color.textMuted,
+    fontSize: 14,
+    textAlign: 'center'
+  },
   suggestionTitle: {
     color: ui.color.accent,
     fontSize: 13,
@@ -270,29 +306,4 @@ const styles = StyleSheet.create({
     letterSpacing: 2.2,
     fontWeight: '700'
   },
-  bottomTabs: {
-    height: 68,
-    borderTopWidth: 2,
-    borderTopColor: ui.color.borderStrong,
-    flexDirection: 'row',
-    backgroundColor: ui.color.bg
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRightWidth: 1,
-    borderRightColor: ui.color.borderStrong
-  },
-  tabText: {
-    color: ui.color.textMuted,
-    fontSize: 15,
-    fontWeight: '700'
-  },
-  tabActive: {
-    color: ui.color.accent
-  },
-  tabDisabled: {
-    opacity: 0.5
-  }
 });

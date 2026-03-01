@@ -327,8 +327,8 @@ export class MatchingService {
 
     const overlap = this.intersectionCount(valuesA, valuesB);
     const valueOverlap = overlap / 10;
-    const top3RankMatches = this.countTop3RankMatches(valuesA, valuesB);
-    const top3Bonus = top3RankMatches > 0 ? 0.1 : 0;
+    const hasTop3Overlap = this.hasTop3Overlap(valuesA, valuesB);
+    const top3Bonus = hasTop3Overlap ? 0.1 : 0;
     const values = Math.min(1, valueOverlap + top3Bonus);
 
     const total = Number((personality * 0.4 + morality * 0.4 + values * 0.2).toFixed(4));
@@ -527,12 +527,8 @@ export class MatchingService {
     return [...new Set(listA)].filter((value) => setB.has(value)).length;
   }
 
-  private countTop3RankMatches(listA: string[], listB: string[]) {
-    let matches = 0;
-    for (let i = 0; i < 3; i += 1) {
-      if (!listA[i] || !listB[i]) continue;
-      if (listA[i] === listB[i]) matches += 1;
-    }
-    return matches;
+  private hasTop3Overlap(listA: string[], listB: string[]) {
+    const topA = new Set(listA.slice(0, 3));
+    return listB.slice(0, 3).some((value) => topA.has(value));
   }
 }
