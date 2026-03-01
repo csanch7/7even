@@ -1,0 +1,66 @@
+[
+  {
+    "name": "Lula Cafe",
+    "type": "restaurant",
+    "neighborhood": "Logan Square",
+    "tags": ["foodie", "coffee", "books"],
+    "address": "2537 N Kedzie Blvd",
+    "description": "Farm-to-table spot with brunch and cozy date vibe."
+  },
+  {
+    "name": "The Second City",
+    "type": "event",
+    "neighborhood": "Old Town",
+    "tags": ["comedy", "nightlife"],
+    "address": "1616 N Wells St",
+    "description": "Classic improv comedy shows for fun first dates."
+  },
+  {
+    "name": "WhirlyBall Chicago",
+    "type": "event",
+    "neighborhood": "Bucktown",
+    "tags": ["sports", "gaming", "foodie"],
+    "address": "1825 W Webster Ave",
+    "description": "Arcade and activity-heavy social date experience."
+  },
+  {
+    "name": "Art Institute of Chicago",
+    "type": "event",
+    "neighborhood": "Loop",
+    "tags": ["art", "books"],
+    "address": "111 S Michigan Ave",
+    "description": "Museum date with rotating exhibitions."
+  },
+  {
+    "name": "Kingston Mines",
+    "type": "event",
+    "neighborhood": "Lincoln Park",
+    "tags": ["music", "nightlife"],
+    "address": "2548 N Halsted St",
+    "description": "Legendary blues club for live music lovers."
+  },
+  {
+    "name": "Big Star",
+    "type": "restaurant",
+    "neighborhood": "Wicker Park",
+    "tags": ["foodie", "nightlife", "outdoors"],
+    "address": "1531 N Damen Ave",
+    "description": "Tacos and patio scene with casual energy."
+  },
+  {
+    "name": "Garfield Park Conservatory",
+    "type": "event",
+    "neighborhood": "Garfield Park",
+    "tags": ["outdoors", "art"],
+    "address": "300 N Central Park Ave",
+    "description": "Green indoor escape for relaxed conversations."
+  },
+  {
+    "name": "Replay Lincoln Park",
+    "type": "event",
+    "neighborhood": "Lincoln Park",
+    "tags": ["gaming", "music", "nightlife"],
+    "address": "2833 N Sheffield Ave",
+    "description": "Arcade bar with themed pop-ups and games."
+  }
+]

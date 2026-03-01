@@ -1,0 +1,51 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: seven-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      - mongo
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      MONGODB_URI: mongodb://mongo:27017/seven
+      JWT_ACCESS_SECRET: local-access-secret
+      JWT_REFRESH_SECRET: local-refresh-secret
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 30d
+      FRONTEND_URL: http://localhost:8081
+      MATCH_TIMEZONE: America/Chicago
+      MATCH_HOUR: 10
+      MATCH_MINUTE: 0
+      MATCH_COOLDOWN_WEEKS: 4
+      EMAIL_OTP_TTL_MINUTES: 15
+      SOFT_DELETE_RETENTION_DAYS: 30
+      WORKER_AUTH_TOKEN: local-service-token
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: development
+      API_BASE_URL: http://api:4000/api
+      WORKER_AUTH_TOKEN: local-service-token
+      TIMEZONE: America/Chicago
+
+volumes:
+  mongo-data:
