@@ -31,6 +31,12 @@ const SCHOOL_BY_EMAIL_DOMAIN: Array<{ school: string; domains: string[] }> = [
   { school: 'Columbia College Chicago', domains: ['colum.edu', 'columbiachicago.edu'] },
   { school: 'Harold Washington College', domains: ['haroldwashington.edu', 'hwc.ccc.edu'] }
 ];
+const LOOKING_FOR_TO_PREFERRED_GENDERS: Record<string, string[]> = {
+  men: ['male'],
+  women: ['female'],
+  'non-binary': ['non-binary'],
+  all: ['male', 'female', 'non-binary', 'other']
+};
 
 @Injectable()
 export class AuthService {
@@ -58,11 +64,19 @@ export class AuthService {
       throw new BadRequestException('Email already in use.');
     }
 
+    const resolvedGender = this.resolveRegistrationGender(dto);
+    const preferredGenders =
+      LOOKING_FOR_TO_PREFERRED_GENDERS[dto.lookingFor] ??
+      dto.preferredGenders ??
+      ['male', 'female', 'non-binary', 'other'];
+
     const passwordHash = await argon2.hash(dto.password);
     const user = await this.usersService.createFromRegistration(
       {
         ...dto,
-        school
+        school,
+        gender: resolvedGender,
+        preferredGenders
       },
       passwordHash
     );
@@ -88,6 +102,15 @@ export class AuthService {
       }
     }
     return null;
+  }
+
+  private resolveRegistrationGender(dto: RegisterDto) {
+    if (dto.gender !== 'other') return dto.gender;
+    const custom = dto.genderOther?.trim();
+    if (!custom) {
+      throw new BadRequestException('Please provide your gender when selecting "other".');
+    }
+    return custom;
   }
 
   async verifyEmail(dto: VerifyEmailDto) {

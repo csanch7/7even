@@ -16,6 +16,9 @@ class ScoreBreakdown {
 
   @Prop({ required: true })
   unmatchedBoost!: number;
+
+  @Prop()
+  aiRerank?: number;
 }
 
 @Schema({ timestamps: true, collection: 'matches' })

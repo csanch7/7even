@@ -34,6 +34,20 @@ export interface MatchResponse {
   userB: string;
   status: string;
   expiresAt: string;
+  matchedWith?: {
+    id: string;
+    fullName: string;
+    school?: string;
+    major?: string;
+    profilePhotoUrl?: string;
+  } | null;
+  score?: {
+    total: number;
+    personality: number;
+    interests: number;
+    unmatchedBoost: number;
+    aiRerank?: number;
+  };
 }
 
 export interface QuizQuestionResponse {

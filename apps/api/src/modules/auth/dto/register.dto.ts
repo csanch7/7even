@@ -1,5 +1,4 @@
 import {
-  ArrayMinSize,
   IsArray,
   IsDateString,
   IsEmail,
@@ -13,7 +12,8 @@ import {
 } from 'class-validator';
 
 const ORIENTATIONS = ['straight', 'gay', 'lesbian', 'bisexual', 'pansexual', 'queer', 'asexual', 'other'] as const;
-const GENDERS = ['man', 'woman', 'non_binary', 'other'] as const;
+const GENDERS = ['male', 'female', 'non-binary', 'other'] as const;
+const LOOKING_FOR = ['men', 'women', 'non-binary', 'all'] as const;
 const SCHOOL_YEARS = ['freshman', 'sophomore', 'junior', 'senior', 'graduate'] as const;
 const CTA_LINES = ['Red Line', 'Brown Line', 'Purple Line', 'Green Line', 'Blue Line', 'Orange Line', 'Metra', 'Bus', 'I Drive'] as const;
 const PRONOUNS = ['he/him', 'she/her', 'they/them', 'other'] as const;
@@ -52,9 +52,17 @@ export class RegisterDto {
   @IsIn(GENDERS)
   gender!: (typeof GENDERS)[number];
 
+  @IsOptional()
+  @IsString()
+  genderOther?: string;
+
   @IsString()
   @IsIn(ORIENTATIONS)
   orientation!: (typeof ORIENTATIONS)[number];
+
+  @IsString()
+  @IsIn(LOOKING_FOR)
+  lookingFor!: (typeof LOOKING_FOR)[number];
 
   @IsString()
   @IsIn(PRONOUNS)
@@ -68,10 +76,10 @@ export class RegisterDto {
   @IsIn(CTA_LINES)
   ctaLine?: (typeof CTA_LINES)[number];
 
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
-  @IsIn(GENDERS, { each: true })
-  preferredGenders!: Array<(typeof GENDERS)[number]>;
+  @IsString({ each: true })
+  preferredGenders?: string[];
 
   @IsInt()
   @Min(18)

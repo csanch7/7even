@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import dayjs from 'dayjs';
@@ -28,11 +28,14 @@ interface PairCandidate {
     personality: number;
     interests: number;
     unmatchedBoost: number;
+    aiRerank?: number;
   };
 }
 
 @Injectable()
 export class MatchingService {
+  private readonly logger = new Logger(MatchingService.name);
+
   constructor(
     @InjectModel(MatchingCycle.name)
     private readonly cycleModel: Model<MatchingCycleDocument>,
@@ -86,6 +89,8 @@ export class MatchingService {
       }
     }
 
+    candidates.sort((a, b) => b.score.total - a.score.total);
+    await this.maybeRerankWithAI(candidates, vectorByUser);
     candidates.sort((a, b) => b.score.total - a.score.total);
 
     const selected: PairCandidate[] = [];
@@ -162,12 +167,33 @@ export class MatchingService {
   }
 
   async getCurrentMatch(userId: string) {
-    return this.matchModel
+    const match = await this.matchModel
       .findOne({
         status: 'active',
         $or: [{ userA: new Types.ObjectId(userId) }, { userB: new Types.ObjectId(userId) }]
       })
       .sort({ createdAt: -1 });
+
+    if (!match) return null;
+
+    const matchedWithId =
+      match.userA.toString() === userId ? match.userB.toString() : match.userA.toString();
+    const matchedWith = await this.usersService.findById(matchedWithId);
+
+    return {
+      ...(typeof (match as MatchDocument & { toObject?: () => Record<string, unknown> }).toObject === 'function'
+        ? (match as MatchDocument & { toObject: () => Record<string, unknown> }).toObject()
+        : match),
+      matchedWith: matchedWith
+        ? {
+            id: matchedWith.id,
+            fullName: matchedWith.fullName,
+            school: matchedWith.school,
+            major: (matchedWith as UserDocument & { major?: string }).major,
+            profilePhotoUrl: matchedWith.profilePhotoUrl
+          }
+        : null
+    };
   }
 
   async getMatchHistory(userId: string) {
@@ -212,11 +238,7 @@ export class MatchingService {
   private async isEligiblePair(userA: UserDocument, userB: UserDocument) {
     if (userA.id === userB.id) return false;
 
-    const cooldownWeeks = this.config.get<number>('MATCH_COOLDOWN_WEEKS', 4);
-    const since = dayjs().subtract(cooldownWeeks, 'week').toDate();
-
-    const recentMatch = await this.matchModel.findOne({
-      createdAt: { $gte: since },
+    const priorMatch = await this.matchModel.findOne({
       $or: [
         {
           userA: new Types.ObjectId(userA.id),
@@ -229,7 +251,7 @@ export class MatchingService {
       ]
     });
 
-    if (recentMatch) return false;
+    if (priorMatch) return false;
 
     const blocked = await this.blockedPairModel.findOne({
       $or: [
@@ -252,8 +274,13 @@ export class MatchingService {
     const ageOkForA = userB.age >= userAPref.preferredAgeMin && userB.age <= userAPref.preferredAgeMax;
     const ageOkForB = userA.age >= userBPref.preferredAgeMin && userA.age <= userBPref.preferredAgeMax;
 
-    const genderOkForA = userAPref.preferredGenders.includes(userB.gender);
-    const genderOkForB = userBPref.preferredGenders.includes(userA.gender);
+    const userAGender = this.normalizeGenderValue(userA.gender);
+    const userBGender = this.normalizeGenderValue(userB.gender);
+    const preferredForA = this.normalizePreferredGenderValues(userAPref.preferredGenders ?? []);
+    const preferredForB = this.normalizePreferredGenderValues(userBPref.preferredGenders ?? []);
+
+    const genderOkForA = preferredForA.includes(userBGender);
+    const genderOkForB = preferredForB.includes(userAGender);
 
     return ageOkForA && ageOkForB && genderOkForA && genderOkForB;
   }
@@ -314,5 +341,162 @@ export class MatchingService {
   private getCycleKey(date: Date) {
     const local = dayjs(date).tz(this.timezone());
     return local.day(0).format('YYYY-MM-DD');
+  }
+
+  private async maybeRerankWithAI(
+    candidates: PairCandidate[],
+    vectorByUser: Map<string, { traits?: Record<string, number>; interests?: string[]; valueSortTop?: string[] }>
+  ) {
+    const enabled = this.config.get<string>('MATCH_AI_ENABLED', 'false') === 'true';
+    const apiKey = this.config.get<string>('MATCH_AI_API_KEY', '');
+    if (!enabled || !apiKey || candidates.length === 0) return;
+
+    const topK = this.config.get<number>('MATCH_AI_TOP_K', 300);
+    const batchSize = Math.max(1, this.config.get<number>('MATCH_AI_BATCH_SIZE', 20));
+    const weight = Math.min(0.5, Math.max(0.05, this.config.get<number>('MATCH_AI_WEIGHT', 0.25)));
+    const model = this.config.get<string>('MATCH_AI_MODEL', 'gpt-4o-mini');
+
+    const subset = candidates.slice(0, Math.min(topK, candidates.length));
+    for (let i = 0; i < subset.length; i += batchSize) {
+      const batch = subset.slice(i, i + batchSize);
+      const payload = batch.map((candidate, idx) => {
+        const pairId = `${i + idx}`;
+        return {
+          pairId,
+          userA: {
+            age: candidate.userA.age,
+            school: candidate.userA.school,
+            major: (candidate.userA as UserDocument & { major?: string }).major ?? '',
+            interests: vectorByUser.get(candidate.userA.id)?.interests ?? candidate.userA.interests ?? [],
+            valuesTop10: vectorByUser.get(candidate.userA.id)?.valueSortTop ?? []
+          },
+          userB: {
+            age: candidate.userB.age,
+            school: candidate.userB.school,
+            major: (candidate.userB as UserDocument & { major?: string }).major ?? '',
+            interests: vectorByUser.get(candidate.userB.id)?.interests ?? candidate.userB.interests ?? [],
+            valuesTop10: vectorByUser.get(candidate.userB.id)?.valueSortTop ?? []
+          },
+          deterministic: candidate.score,
+          traitsA: vectorByUser.get(candidate.userA.id)?.traits ?? {},
+          traitsB: vectorByUser.get(candidate.userB.id)?.traits ?? {}
+        };
+      });
+
+      const aiScores = await this.scoreBatchWithAI(payload, apiKey, model);
+      if (aiScores.size === 0) continue;
+
+      for (let offset = 0; offset < batch.length; offset += 1) {
+        const pairId = `${i + offset}`;
+        const aiScore = aiScores.get(pairId);
+        if (typeof aiScore !== 'number') continue;
+
+        const candidate = batch[offset];
+        candidate.score.aiRerank = Number(aiScore.toFixed(4));
+        candidate.score.total = Number(
+          (candidate.score.total * (1 - weight) + candidate.score.aiRerank * weight).toFixed(4)
+        );
+      }
+    }
+  }
+
+  private async scoreBatchWithAI(
+    batchPayload: Array<Record<string, unknown>>,
+    apiKey: string,
+    model: string
+  ) {
+    const timeoutMs = this.config.get<number>('MATCH_AI_TIMEOUT_MS', 12000);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You score compatibility pairs. Return strict JSON: {"scores":[{"pairId":"string","aiScore":number}]}. aiScore must be 0..1.'
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
+                instructions:
+                  'For each pair, output one aiScore between 0 and 1. Prefer similarity in values ranking, moral traits, and big-five compatibility. Do not omit any pairId.',
+                pairs: batchPayload
+              })
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`AI rerank request failed: ${response.status}`);
+        return new Map<string, number>();
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) return new Map<string, number>();
+
+      const parsed = this.safeJsonParse(content);
+      const list = parsed?.scores;
+      if (!Array.isArray(list)) return new Map<string, number>();
+
+      const result = new Map<string, number>();
+      for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const pairId = (item as { pairId?: unknown }).pairId;
+        const rawScore = (item as { aiScore?: unknown }).aiScore;
+        if (typeof pairId !== 'string' || typeof rawScore !== 'number') continue;
+        const normalized = Math.max(0, Math.min(1, rawScore));
+        result.set(pairId, normalized);
+      }
+      return result;
+    } catch (error) {
+      const isAbort = typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+      this.logger.warn(`AI rerank failed${isAbort ? ' due to timeout' : ''}. Using deterministic scores.`);
+      return new Map<string, number>();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private safeJsonParse(input: string): Record<string, unknown> | null {
+    try {
+      return JSON.parse(input) as Record<string, unknown>;
+    } catch {
+      const start = input.indexOf('{');
+      const end = input.lastIndexOf('}');
+      if (start < 0 || end <= start) return null;
+      try {
+        return JSON.parse(input.slice(start, end + 1)) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  private normalizeGenderValue(input: string) {
+    const value = (input ?? '').toLowerCase().trim();
+    if (value === 'man' || value === 'male') return 'male';
+    if (value === 'woman' || value === 'female') return 'female';
+    if (value === 'non_binary' || value === 'non-binary' || value === 'nonbinary') return 'non-binary';
+    return 'other';
+  }
+
+  private normalizePreferredGenderValues(values: string[]) {
+    return values.map((value) => this.normalizeGenderValue(value));
   }
 }

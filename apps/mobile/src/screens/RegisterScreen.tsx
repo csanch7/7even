@@ -8,6 +8,8 @@ import type { RootStackParamList } from '../../App';
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 const CTA_OPTIONS = ['Red Line', 'Brown Line', 'Purple Line', 'Green Line', 'Blue Line', 'Orange Line', 'Metra', 'Bus', 'I Drive'] as const;
 const PRONOUN_OPTIONS = ['he/him', 'she/her', 'they/them', 'other'] as const;
+const GENDER_OPTIONS = ['male', 'female', 'non-binary', 'other'] as const;
+const LOOKING_FOR_OPTIONS = ['men', 'women', 'non-binary', 'all'] as const;
 function formatPronounsLabel(value: string) {
   if (value.includes('/')) {
     return value
@@ -46,6 +48,9 @@ export function RegisterScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [major, setMajor] = useState('');
   const [schoolYear, setSchoolYear] = useState<'freshman' | 'sophomore' | 'junior' | 'senior' | 'graduate'>('freshman');
+  const [gender, setGender] = useState<(typeof GENDER_OPTIONS)[number]>('female');
+  const [genderOther, setGenderOther] = useState('');
+  const [lookingFor, setLookingFor] = useState<(typeof LOOKING_FOR_OPTIONS)[number]>('all');
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
   const [ctaLine, setCtaLine] = useState<(typeof CTA_OPTIONS)[number] | ''>('');
   const [pronouns, setPronouns] = useState<(typeof PRONOUN_OPTIONS)[number]>('she/her');
@@ -63,6 +68,10 @@ export function RegisterScreen({ navigation }: Props) {
       Alert.alert('Missing major', 'Please enter your major.');
       return;
     }
+    if (gender === 'other' && !genderOther.trim()) {
+      Alert.alert('Missing gender', 'Please enter your gender for "Other".');
+      return;
+    }
 
     try {
       await register({
@@ -74,12 +83,14 @@ export function RegisterScreen({ navigation }: Props) {
         school,
         major: major.trim(),
         schoolYear,
-        gender: 'woman',
+        gender,
+        genderOther: genderOther.trim() || undefined,
         orientation: 'straight',
+        lookingFor,
         pronouns,
         profilePhotoUrl: profilePhotoUrl.trim() || 'https://example.com/profile.jpg',
         ctaLine: ctaLine || undefined,
-        preferredGenders: ['man'],
+        preferredGenders: [],
         preferredAgeMin: 18,
         preferredAgeMax: 30,
         interests: ['coffee', 'music']
@@ -98,6 +109,41 @@ export function RegisterScreen({ navigation }: Props) {
       <TextInput style={styles.input} placeholder=".edu email" autoCapitalize="none" value={email} onChangeText={setEmail} />
       <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
       <TextInput style={styles.input} placeholder="Major" value={major} onChangeText={setMajor} />
+      <Text style={styles.optionLabel}>Gender</Text>
+      <View style={styles.optionGrid}>
+        {GENDER_OPTIONS.map((option) => {
+          const selected = gender === option;
+          return (
+            <Pressable
+              key={option}
+              style={[styles.optionChip, selected && styles.optionChipActive]}
+              onPress={() => setGender(option)}
+            >
+              <Text style={selected ? styles.optionTextActive : styles.optionText}>{option[0].toUpperCase() + option.slice(1)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {gender === 'other' ? (
+        <TextInput style={styles.input} placeholder="Your gender" value={genderOther} onChangeText={setGenderOther} />
+      ) : null}
+      <Text style={styles.optionLabel}>Looking For</Text>
+      <View style={styles.optionGrid}>
+        {LOOKING_FOR_OPTIONS.map((option) => {
+          const selected = lookingFor === option;
+          return (
+            <Pressable
+              key={option}
+              style={[styles.optionChip, selected && styles.optionChipActive]}
+              onPress={() => setLookingFor(option)}
+            >
+              <Text style={selected ? styles.optionTextActive : styles.optionText}>
+                {option === 'all' ? 'All' : option === 'non-binary' ? 'Non-binary' : option[0].toUpperCase() + option.slice(1)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
       <Text style={styles.optionLabel}>Pronouns</Text>
       <View style={styles.optionGrid}>
         {PRONOUN_OPTIONS.map((option) => {

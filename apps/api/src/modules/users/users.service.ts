@@ -12,7 +12,14 @@ export class UsersService {
     private readonly userModel: Model<UserDocument>
   ) {}
 
-  async createFromRegistration(dto: RegisterDto & { school: string }, passwordHash: string) {
+  async createFromRegistration(
+    dto: Omit<RegisterDto, 'school' | 'gender' | 'preferredGenders'> & {
+      school: string;
+      gender: string;
+      preferredGenders: string[];
+    },
+    passwordHash: string
+  ) {
     return this.userModel.create({
       email: dto.email.toLowerCase(),
       passwordHash,
@@ -29,7 +36,7 @@ export class UsersService {
       ctaLine: dto.ctaLine ?? '',
       interests: dto.interests ?? [],
       preferences: {
-        preferredGenders: dto.preferredGenders,
+        preferredGenders: dto.preferredGenders ?? [],
         preferredAgeMin: dto.preferredAgeMin,
         preferredAgeMax: dto.preferredAgeMax
       },

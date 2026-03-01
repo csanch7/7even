@@ -1,15 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../api/client';
 import { MatchResponse } from '../types/api';
-
-interface SuggestionItem {
-  name: string;
-  type: string;
-  matchedTags: string[];
-}
 
 interface Props {
   onProfilePress?: () => void;
@@ -18,7 +12,6 @@ interface Props {
 export function MatchScreen({ onProfilePress }: Props) {
   const { accessToken, logout } = useAuth();
   const [match, setMatch] = useState<MatchResponse | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
 
@@ -32,16 +25,6 @@ export function MatchScreen({ onProfilePress }: Props) {
         accessToken
       );
       setMatch(current);
-      if (current?._id) {
-        const suggestionRes = await apiRequest<{ items: SuggestionItem[] }>(
-          `/matches/${current._id}/suggestions`,
-          undefined,
-          accessToken
-        );
-        setSuggestions(suggestionRes?.items ?? []);
-      } else {
-        setSuggestions([]);
-      }
     } finally {
       setRefreshing(false);
     }
@@ -75,7 +58,10 @@ export function MatchScreen({ onProfilePress }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Weekly Match</Text>
         <Pressable style={styles.profileIcon} onPress={onProfilePress}>
@@ -86,19 +72,18 @@ export function MatchScreen({ onProfilePress }: Props) {
         <>
           <Text style={styles.meta}>Status: {match.status}</Text>
           <Text style={styles.meta}>Expires: {new Date(match.expiresAt).toLocaleString()}</Text>
-          <Text style={styles.subtitle}>Top 5 Suggestions</Text>
-          <FlatList
-            data={suggestions}
-            keyExtractor={(item, idx) => `${item.name}-${idx}`}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
-            renderItem={({ item }) => (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
-                <Text>{item.type}</Text>
-                <Text>{item.matchedTags.join(', ')}</Text>
-              </View>
-            )}
-          />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>You Matched With</Text>
+            <Text style={styles.metaStrong}>{match.matchedWith?.fullName ?? 'Your match'}</Text>
+            {match.matchedWith?.school ? <Text style={styles.meta}>{match.matchedWith.school}</Text> : null}
+            {match.matchedWith?.major ? <Text style={styles.meta}>{match.matchedWith.major}</Text> : null}
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Date Suggestion (Template)</Text>
+            <Text style={styles.meta}>Date idea: ____________________</Text>
+            <Text style={styles.meta}>Place: _______________________</Text>
+            <Text style={styles.meta}>Time: ________________________</Text>
+          </View>
         </>
       ) : (
         <>
@@ -107,7 +92,7 @@ export function MatchScreen({ onProfilePress }: Props) {
         </>
       )}
       <PrimaryButton label="Log out" onPress={logout} />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -129,6 +114,7 @@ const styles = StyleSheet.create({
   profileIconText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
   subtitle: { marginTop: 16, marginBottom: 8, fontSize: 18, fontWeight: '700', color: '#154734' },
   meta: { marginBottom: 6, color: '#4A4A4A' },
+  metaStrong: { marginBottom: 6, color: '#1E2E27', fontWeight: '700', fontSize: 17 },
   card: { padding: 12, backgroundColor: '#FFFFFF', borderRadius: 12, marginBottom: 10 },
-  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 }
+  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8, color: '#154734' }
 });

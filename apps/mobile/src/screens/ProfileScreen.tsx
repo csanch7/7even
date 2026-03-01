@@ -114,6 +114,7 @@ export function ProfileScreen({ onBack }: Props) {
         </View>
       )}
       <View style={styles.card}>
+        <Text style={styles.row}>Name: {profile?.fullName ?? 'Not set'}</Text>
         <Text style={styles.row}>School: {profile?.school ?? 'Not set'}</Text>
         {!editing ? (
           <>
